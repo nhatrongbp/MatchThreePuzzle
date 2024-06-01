@@ -1,13 +1,13 @@
 using System.Collections;
 using System.Collections.Generic;
-using UnityEditor.SearchService;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
+[RequireComponent(typeof(LevelGoal))]
 public class GameManager : Singleton<GameManager>
 {
-    public int movesLeft = 30, scoreGoal = 10000;
+    //public int movesLeft = 30, scoreGoal = 10000;
     public ScreenFader screenFader;
     public Text levelNameText, movesLeftText;
     Board m_board;
@@ -15,10 +15,21 @@ public class GameManager : Singleton<GameManager>
     bool m_isGameOver = false; //if the player is out of moves or not
     public MessageWindow messageWindow;
     public Sprite loseIcon, winIcon, goalIcon;
+    public ScoreMeter scoreMeter;
+    LevelGoal m_levelGoal;
+    LevelGoalTimed m_levelGoalTimed;
+
+    public override void Awake()
+    {
+        base.Awake();
+        m_levelGoal = GetComponent<LevelGoal>();
+        m_levelGoalTimed = GetComponent<LevelGoalTimed>();
+        m_board = GameObject.FindObjectOfType<Board>().GetComponent<Board>();
+    }
     // Start is called before the first frame update
     void Start()
     {
-        m_board = GameObject.FindObjectOfType<Board>().GetComponent<Board>();
+        if (scoreMeter != null) scoreMeter.SetupStars(m_levelGoal);
         if (levelNameText != null)
         {
             levelNameText.text = SceneManager.GetActiveScene().name;
@@ -43,7 +54,7 @@ public class GameManager : Singleton<GameManager>
     IEnumerator StartGameRoutine()
     {
         messageWindow.GetComponent<RectXformMover>().MoveOn();
-        messageWindow.ShowMessage(goalIcon, "score goal\n" + scoreGoal.ToString(), "start");
+        messageWindow.ShowMessage(goalIcon, "score goal\n" + m_levelGoal.scoreGoals[0].ToString(), "start");
         while (!m_isReadyToBegin)
         {
             yield return null;
@@ -55,16 +66,18 @@ public class GameManager : Singleton<GameManager>
 
     IEnumerator PlayGameRoutine()
     {
+        if(m_levelGoalTimed != null) m_levelGoalTimed.StartCountdown();
         while (!m_isGameOver)   //while there are available moves left
         {
             //check if player win without using all moves
-            if(m_board.m_playerInputEnabled && ScoreManager.Instance.CurrentScore >= scoreGoal){
-                m_board.m_playerInputEnabled = false;
-                m_isGameOver = true;
-                m_isWinner = true;
+            if (m_board.m_playerInputEnabled)
+            {
+                m_isGameOver = m_levelGoal.IsGameOver();
+                m_isWinner = m_levelGoal.IsWinner();
             }
             yield return null;
         }
+        m_board.m_playerInputEnabled = false;
         //now the player is out of moves, and all the pieces had fallen down completely
         //check if player win after using all moves
 
@@ -72,6 +85,10 @@ public class GameManager : Singleton<GameManager>
 
     IEnumerator EndGameRoutine()
     {
+        //stop the countdown timer if the player reached 3 stars
+        if(m_levelGoalTimed != null){
+            m_levelGoalTimed.timer.paused = true;
+        }
         m_isReadyToReload = false;
         //yield return new WaitForSeconds(screenFader.delay + screenFader.timeToFade);
         if (screenFader != null) screenFader.FadeOn();
@@ -97,12 +114,21 @@ public class GameManager : Singleton<GameManager>
 
     public void UpdateMoves(int change = -1)
     {
-        movesLeft += change;
-        if (movesLeftText != null)
+        if (m_levelGoalTimed == null)
         {
-            movesLeftText.text = movesLeft.ToString();
+            m_levelGoal.movesLeft += change;
+            if (movesLeftText != null)
+            {
+                movesLeftText.text = m_levelGoal.movesLeft.ToString();
+            }
+            if (m_levelGoal.movesLeft <= 0) StartCoroutine(CheckEndGameRoutine());
+        } else {
+            if (movesLeftText != null)
+            {
+                movesLeftText.text = "\u221E";
+                movesLeftText.fontSize = 128;
+            }
         }
-        if (movesLeft <= 0) StartCoroutine(CheckEndGameRoutine());
     }
 
     IEnumerator CheckEndGameRoutine()
@@ -110,13 +136,32 @@ public class GameManager : Singleton<GameManager>
         //because we need to make sure that
         //all the pieces have fallen down completely before trigger the "end" state of the game
         while (!m_board.m_playerInputEnabled) yield return null;
-        m_board.m_playerInputEnabled = false;
+        //m_board.m_playerInputEnabled = false;
         m_isGameOver = true;
         //now the player is out of moves, and all the pieces had fallen down completely
+
     }
 
     public void ReloadScene()
     {
         m_isReadyToReload = true;
+    }
+
+    public void ScorePoints(GamePiece piece, int multiplier = 1, int bonus = 0)
+    {
+        if (ScoreManager.Instance != null)
+        {
+            ScoreManager.Instance.AddScore(piece.scoreValue * multiplier + bonus);
+            m_levelGoal.UpdateScoreStars(ScoreManager.Instance.CurrentScore);
+            if (scoreMeter != null) scoreMeter.UpdateScoreMeter(ScoreManager.Instance.CurrentScore, m_levelGoal.scoreStars);
+        }
+        if (SoundManager.Instance != null)
+        {
+            SoundManager.Instance.PlayClip(piece.clearSound, SoundManager.Instance.fxVolumn);
+        }
+    }
+
+    public void AddTime(int timeValue){
+        if(m_levelGoalTimed != null) m_levelGoalTimed.AddTime(timeValue);
     }
 }

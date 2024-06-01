@@ -8,10 +8,10 @@ public class LimitFrameRate : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-#if (UNITY_EDITOR)
+// #if (UNITY_EDITOR)
         QualitySettings.vSyncCount = 0;
         Application.targetFrameRate = frameRate;
-#endif
+// #endif
     }
 
     // Update is called once per frame

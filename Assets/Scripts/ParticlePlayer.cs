@@ -10,7 +10,7 @@ public class ParticlePlayer : MonoBehaviour
     void Start()
     {
         allParticles = GetComponentsInChildren<ParticleSystem>();
-        Destroy(gameObject, lifetime);
+        //Destroy(gameObject, lifetime);
     }
 
     // Update is called once per frame
@@ -21,5 +21,6 @@ public class ParticlePlayer : MonoBehaviour
             item.Stop();
             item.Play();
         }
+        Destroy(gameObject, lifetime);
     }
 }

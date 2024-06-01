@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
+[RequireComponent(typeof(BoardDeadlock))]
+[RequireComponent(typeof(BoardShuffler))]
 public class Board : MonoBehaviour
 {
     public int width, height;
@@ -11,7 +13,10 @@ public class Board : MonoBehaviour
     public GameObject tileNormalPrefab;
     public GameObject tileObstaclePrefab;
     public GameObject[] gamePiecePrefabs;
-    public GameObject adjacentPrefab, columnBombPrefab, rowBombPrefab, colorBombPrefab;
+    public GameObject[] adjacentPrefabs;
+    public GameObject[] columnBombPrefabs;
+    public GameObject[] rowBombPrefabs;
+    public GameObject colorBombPrefab;
     public int maxCollectibles = 3, collectibleCount;
     [Range(0, 1)]
     public float chanceForCollectible = 0.1f;
@@ -35,14 +40,20 @@ public class Board : MonoBehaviour
 
     ParticleManager m_particleManager;
     int m_scoreMultiplier = 0;
+    BoardDeadlock m_boardDeadlock;
+    BoardShuffler m_boardShuffler;
 
     // Start is called before the first frame update
     void Start()
     {
+        width = (int)Mathf.Clamp(width, 3, 9);
+        height = (int)Mathf.Clamp(height, 3, 9);
         m_allTiles = new Tile[width, height];
         m_allGamePieces = new GamePiece[width, height];
         
-        m_particleManager = GameObject.FindWithTag("ParticleManager").GetComponent<ParticleManager>(); ;
+        m_particleManager = GameObject.FindWithTag("ParticleManager").GetComponent<ParticleManager>();
+        m_boardDeadlock = GetComponent<BoardDeadlock>();
+        m_boardShuffler = GetComponent<BoardShuffler>();
     }
 
     public void SetupBoard(){
@@ -59,7 +70,11 @@ public class Board : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.E))
         {
-            Debug.Log("E pressed");
+            m_boardDeadlock.IsDeadlocked(m_allGamePieces);
+            if (m_playerInputEnabled)
+            {
+                StartCoroutine(ShuffleBoardRoutine());
+            }
         }
     }
 
@@ -106,7 +121,7 @@ public class Board : MonoBehaviour
         //setup special TileType(s)
         foreach (StartingObject item in startingTiles)
         {
-            if (item != null && m_allTiles[item.x, item.y] == null)
+            if (IsWithinBounds(item.x, item.y) && item != null && m_allTiles[item.x, item.y] == null)
                 MakeTile(item.prefab, item.x, item.y, item.z);
         }
 
@@ -127,7 +142,7 @@ public class Board : MonoBehaviour
     {
         foreach (StartingObject item in startingGamePieces)
         {
-            if (item != null && m_allGamePieces[item.x, item.y] == null
+            if (IsWithinBounds(item.x, item.y) && item != null && m_allGamePieces[item.x, item.y] == null
                 && m_allTiles[item.x, item.y].tileType != TileType.Obstacle)
             {
                 GameObject piece = Instantiate(item.prefab, new Vector3(item.x, item.y, 0), Quaternion.identity) as GameObject;
@@ -142,6 +157,8 @@ public class Board : MonoBehaviour
         float aspectRatio = Screen.width / (float)Screen.height;
         float verticalSize = (float)height / 2 + borderSize;
         float horizontalSize = ((float)width / 2 + borderSize) / aspectRatio;
+        Debug.Log(verticalSize + " " + horizontalSize);
+        if(verticalSize > horizontalSize) verticalSize += 2f;
         Camera.main.orthographicSize = (verticalSize > horizontalSize) ? verticalSize : horizontalSize;
     }
 
@@ -181,6 +198,31 @@ public class Board : MonoBehaviour
         return null;
     }
 
+    void FillBoardFromList(List<GamePiece> gamePieces)
+    {
+        Queue<GamePiece> unusedPieces = new Queue<GamePiece>(gamePieces);
+        int maxIterations = 100;
+        int iterations = 0;
+        for (int i = 0; i < width; i++)
+        {
+            for (int j = 0; j < height; j++)
+            {
+                if (m_allGamePieces[i, j] == null && m_allTiles[i, j].tileType != TileType.Obstacle)
+                {
+                    m_allGamePieces[i, j] = unusedPieces.Dequeue();
+                    iterations = 0;
+                    while (HasMatchOnFill(i, j))
+                    {
+                        unusedPieces.Enqueue(m_allGamePieces[i, j]);
+                        m_allGamePieces[i, j] = unusedPieces.Dequeue();
+                        iterations++;
+                        if (iterations >= maxIterations) break;
+                    }
+                }
+            }
+        }
+    }
+
     void FillBoard(int maxIterations = 0)
     {
         //Debug.Log(maxIterations);
@@ -201,11 +243,11 @@ public class Board : MonoBehaviour
                     {
                         //first time call from Start()
                         if(j == height-1 && CanAddCollectible()){
-                            FillRandomCollectibleAt(i, j, height - i);
+                            FillRandomCollectibleAt(i, j, Mathf.Max(height, width) - Mathf.Max(i, j));
                             collectibleCount++;
                         }
                         else
-                            FillRandomGamePieceAt(i, j, height - i);
+                            FillRandomGamePieceAt(i, j, Mathf.Max(height, width) - Mathf.Max(i, j));
                     }
                     else
                     {
@@ -222,7 +264,8 @@ public class Board : MonoBehaviour
                     while (iterations < maxIterations && HasMatchOnFill(i, j))
                     {
                         ClearAPieceAt(i, j);
-                        FillRandomGamePieceAt(i, j, height - i);
+                        // FillRandomGamePieceAt(i, j, height - i);
+                        FillRandomGamePieceAt(i, j, Mathf.Max(height, width) - Mathf.Max(i, j));
                         // FillRandomAt(i, j, falseYOffset);
                         iterations++;
                     }
@@ -250,23 +293,28 @@ public class Board : MonoBehaviour
         return leftMatches != null || downwardMatches != null;
     }
 
-    public void ClickTile(Tile Tile)
+    public void ClickTile(Tile tile)
     {
-        if (m_clickedTile == null) m_clickedTile = Tile;
+        if (m_clickedTile == null) m_clickedTile = tile;
+        //Debug.Log("ClickTile: m_clickedTile is exist? " + (m_clickedTile != null));
     }
 
-    public void DragToTile(Tile Tile)
+    public void DragToTile(Tile tile)
     {
         if (m_clickedTile != null)
         {
-            if (IsNextTo(m_clickedTile, Tile))
+            //Debug.Log("DragToTile: m_clickedTile is exist? " + (m_clickedTile != null));
+            //Debug.Log(m_clickedTile.x + " " + m_clickedTile.y + " " + tile.x + " " + tile.y);
+            if (IsNextTo(m_clickedTile, tile))
             {
-                m_targetTile = Tile;
+                //Debug.Log("yes they are next to each other ");
+                m_targetTile = tile;
                 ReleaseTiles();
             }
             else
             {
-                m_clickedTile = null;
+                //Debug.Log("no they are not next to each other ");
+                //m_clickedTile = null;
             }
         }
     }
@@ -275,6 +323,7 @@ public class Board : MonoBehaviour
     {
         if (m_clickedTile != null && m_targetTile != null)
         {
+            //Debug.Log("ReleaseTiles: m_targetTile is exist? " + (m_targetTile != null));
             StartCoroutine(SwitchTilesRoutine(m_clickedTile, m_targetTile));
         }
         m_clickedTile = null;
@@ -517,7 +566,13 @@ public class Board : MonoBehaviour
             if (item != null)
             {
                 ClearAPieceAt(item.xIndex, item.yIndex);
-                item.ScorePoints(m_scoreMultiplier, (gamePieces.Count > 4) ? 20 : 0);
+                if(GameManager.Instance != null){
+                    GameManager.Instance.ScorePoints(item, m_scoreMultiplier, (gamePieces.Count > 4) ? 20 : 0);
+                    TimeBonus timeBonus = item.GetComponent<TimeBonus>();
+                    if(timeBonus != null){
+                        GameManager.Instance.AddTime(timeBonus.bonusValue);
+                    }
+                }
                 if(bombedPieces.Contains(item)){
                     m_particleManager.BombFXAt(item.xIndex, item.yIndex);
                 } else {
@@ -612,9 +667,24 @@ public class Board : MonoBehaviour
                 yield return null;
             };
             gamePieces = FindAllMatches();
+            if(gamePieces.Count > 0){
+                //TODO
+                //need to check for possible bombs made from new FindAllMatches()
+
+                //and then wait for new bombs to finish falling
+            }
             yield return new WaitForSeconds(collapseTimePerTile * 2);
 
         } while (gamePieces.Count > 0);
+
+        //deadlock check
+        if(m_boardDeadlock.IsDeadlocked(m_allGamePieces)){
+            Debug.Log("deadlock detected from ClearAndRefillBoardRoutine()");
+            yield return new WaitForSeconds(collapseTimePerTile * 3);
+            yield return StartCoroutine(ShuffleBoardRoutine());
+            yield return new WaitForSeconds(collapseTimePerTile);
+        }
+
         m_playerInputEnabled = true;
     }
 
@@ -691,7 +761,10 @@ public class Board : MonoBehaviour
     {
         foreach (GamePiece item in gamePieces)
         {
-            if (item != null && item.transform.position.y - (float)item.yIndex > 0.001f) return false;
+            if (item != null){
+                if(item.transform.position.y - (float)item.yIndex > 0.001f) return false;
+                if(item.transform.position.x - (float)item.xIndex > 0.001f) return false;
+            }
         }
         return true;
     }
@@ -795,21 +868,19 @@ public class Board : MonoBehaviour
     GameObject DropBomb(int x, int y, Vector2 swapDirection, List<GamePiece> gamePieces)
     {
         GameObject bomb = null;
-        if (gamePieces.Count >= 4)
+        MatchValue matchValue = FindMatchValue(gamePieces);
+        if (gamePieces.Count >= 4 && matchValue != MatchValue.None)
         {
-            if (IsCornerMatch(gamePieces))
-            {
-                bomb = MakeBomb(adjacentPrefab, x, y);
+            if (!IsCornerMatch(gamePieces) && gamePieces.Count >= 5){
+                bomb = MakeBomb(colorBombPrefab, x, y);
             }
-            else
+            else if (IsCornerMatch(gamePieces))
             {
-                if(gamePieces.Count >= 5) {
-                    bomb = MakeBomb(colorBombPrefab, x, y);
-                }
-                else {
-                    if (swapDirection.x != 0) bomb = MakeBomb(rowBombPrefab, x, y);
-                    else bomb = MakeBomb(columnBombPrefab, x, y);
-                }
+                bomb = MakeBomb(FindPrefabByMatchValue(adjacentPrefabs, matchValue), x, y);
+            }
+            else {
+                if (swapDirection.x != 0) bomb = MakeBomb(FindPrefabByMatchValue(rowBombPrefabs, matchValue), x, y);
+                else bomb = MakeBomb(FindPrefabByMatchValue(columnBombPrefabs, matchValue), x, y);
             }
         }
         return bomb;
@@ -884,5 +955,43 @@ public class Board : MonoBehaviour
         }
         return res;
     }
+
+    MatchValue FindMatchValue(List<GamePiece> gamePieces){
+        foreach (GamePiece piece in gamePieces)
+        {
+            if(piece != null) return piece.matchValue;
+        }
+        return MatchValue.None;
+    }
+
+    GameObject FindPrefabByMatchValue(GameObject[] gameObjectsPrefabs, MatchValue matchValue){
+        if(matchValue == MatchValue.None) return null;
+        foreach (GameObject go in gameObjectsPrefabs)
+        {
+            GamePiece piece = go.GetComponent<GamePiece>();
+            if(piece != null && piece.matchValue == matchValue) return go;
+        }
+        return null;
+    }
+
+    // shuffle non-bomb and non-collectible GamePieces
+    IEnumerator ShuffleBoardRoutine()
+    {
+        List<GamePiece> allPieces = new List<GamePiece>();
+        foreach (GamePiece piece in m_allGamePieces) allPieces.Add(piece);
+
+        while (!FinishFalling(allPieces)) yield return null;
+
+        List<GamePiece> normalPieces = m_boardShuffler.RemoveNormalPieces(m_allGamePieces);
+        m_boardShuffler.ShuffleList(normalPieces);
+        FillBoardFromList(normalPieces);
+
+        m_boardShuffler.MovePieces(m_allGamePieces, swapTime*3);
+
+        // in the event some matches form, clear and refill the Board
+        List<GamePiece> matches = FindAllMatches();
+        StartCoroutine(ClearAndRefillBoardRoutine(matches));
+    }
+
 
 }

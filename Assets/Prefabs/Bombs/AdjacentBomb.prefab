@@ -242,6 +242,30 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 198000013555082876, guid: 046759283fbd6427a954188bd09e9b65, type: 3}
+      propertyPath: t
+      value: 0.7399998
+      objectReference: {fileID: 0}
+    - target: {fileID: 198000013555082876, guid: 046759283fbd6427a954188bd09e9b65, type: 3}
+      propertyPath: SizeModule.y.maxCurve.m_RotationOrder
+      value: 4
+      objectReference: {fileID: 0}
+    - target: {fileID: 198000013555082876, guid: 046759283fbd6427a954188bd09e9b65, type: 3}
+      propertyPath: SizeModule.z.maxCurve.m_RotationOrder
+      value: 4
+      objectReference: {fileID: 0}
+    - target: {fileID: 198000013555082876, guid: 046759283fbd6427a954188bd09e9b65, type: 3}
+      propertyPath: SizeModule.curve.maxCurve.m_RotationOrder
+      value: 4
+      objectReference: {fileID: 0}
+    - target: {fileID: 198000013555082876, guid: 046759283fbd6427a954188bd09e9b65, type: 3}
+      propertyPath: InitialModule.startLifetime.maxCurve.m_RotationOrder
+      value: 4
+      objectReference: {fileID: 0}
+    - target: {fileID: 198000013555082876, guid: 046759283fbd6427a954188bd09e9b65, type: 3}
+      propertyPath: InitialModule.startLifetime.minCurve.m_RotationOrder
+      value: 4
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

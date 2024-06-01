@@ -47,22 +47,24 @@ public class Tile : MonoBehaviour
     }
 
     void OnMouseDown(){
+        //Debug.Log("OnMouseDown");
         if(m_board != null){
             m_board.ClickTile(this);
         }
     }
 
     void OnMouseEnter(){
+        //Debug.Log("OnMouseEnter");
         if(m_board != null){
             m_board.DragToTile(this);
         }
     }
 
-    // void OnMouseUp(){
-    //     if(m_board != null){
-    //         m_board.ReleaseTiles();
-    //     }
-    // }
+    void OnMouseUp(){
+        if(m_board != null){
+            m_board.ReleaseTiles();
+        }
+    }
 
     public void BreakTile(){
         if(tileType != TileType.Breakable) return;

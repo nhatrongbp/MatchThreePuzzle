@@ -88,20 +88,12 @@ public class GamePiece : MonoBehaviour
         // Color colorToMatch = Color.clear;
         if(pieceToMatch != null){
             SpriteRenderer rendererToMatch = pieceToMatch.GetComponent<SpriteRenderer>();
-            if(rendererToMatch != null && renderToChange != null){
-                renderToChange.color = rendererToMatch.color;
-            }
+            // if(rendererToMatch != null && renderToChange != null){
+            //     renderToChange.color = rendererToMatch.color;
+            // }
             matchValue = pieceToMatch.matchValue;
         }
     }
 
-    public void ScorePoints(int multiplier=1, int bonus=0){
-        if(ScoreManager.Instance != null){
-            ScoreManager.Instance.AddScore(scoreValue * multiplier + bonus);
-        }
-        if(SoundManager.Instance != null){
-            SoundManager.Instance.PlayClip(clearSound, SoundManager.Instance.fxVolumn);
-        }
-    }
 
 }

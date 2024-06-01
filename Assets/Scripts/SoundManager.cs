@@ -16,12 +16,12 @@ public class SoundManager : Singleton<SoundManager>
         PlayRandomMusic();
     }
 
-    public AudioSource PlayClip(AudioClip clip, float volume){
+    public AudioSource PlayClip(AudioClip clip, float volume, bool randomizePitch=true){
         if(clip != null){
             GameObject go = new GameObject("SoundFX" + clip.name);
             AudioSource source = go.AddComponent<AudioSource>();
             source.clip = clip;
-            source.pitch = Random.Range(lowPitch, highPitch);
+            if(randomizePitch) source.pitch = Random.Range(lowPitch, highPitch);
             source.volume = volume;
             source.Play();
             Destroy(go, clip.length);
